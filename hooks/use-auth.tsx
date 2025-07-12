@@ -1,0 +1,153 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useEffect, createContext, useContext } from "react"
+import { supabase } from "@/lib/supabase"
+import type { Session } from "@supabase/supabase-js"
+
+type AuthContextType = {
+  session: Session | null
+  user: any
+  profile: any
+  loading: boolean
+  error: string | null
+  signIn: (email: string, password: string) => Promise<{ error: any | null }>
+  signUp: (email: string, password: string, name: string) => Promise<{ error: any | null }>
+  signOut: () => Promise<void>
+  retryProfileCreation: () => void
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setUser(session?.user || null)
+    })
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      setUser(session?.user || null)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile(user.id)
+    } else {
+      setProfile(null)
+      setLoading(false)
+    }
+  }, [user])
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      setError(null)
+
+      // 1 – Do we already have a profile?
+      const { data: existing, error: selectErr } = await supabase.from("users").select("*").eq("id", userId).single()
+
+      if (selectErr && selectErr.code !== "PGRST116") {
+        // PGRST116 = row not found (that’s fine – we’ll create below)
+        throw selectErr
+      }
+
+      // 2 – Insert or update as needed
+      const profilePayload = {
+        id: userId,
+        email: user?.email!,
+        name: user?.user_metadata?.name || user?.email?.split("@")[0] || "User",
+        role: existing ? undefined : "admin", // first time = admin
+      }
+
+      if (existing) {
+        const { error: updateErr } = await supabase.from("users").update(profilePayload).eq("id", userId)
+        if (updateErr) throw updateErr
+      } else {
+        const { error: insertErr } = await supabase.from("users").insert(profilePayload)
+        if (insertErr) throw insertErr
+      }
+
+      // 3 – Fetch the (now-definitely-there) profile
+      const { data: profileRow, error: finalErr } = await supabase.from("users").select("*").eq("id", userId).single()
+
+      if (finalErr) throw finalErr
+
+      setProfile(profileRow)
+    } catch (err: any) {
+      console.error("Profile creation / fetch error:", err)
+      setError(err.message || "Could not create / fetch profile")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const retryProfileCreation = () => {
+    if (user) {
+      setLoading(true)
+      setError(null)
+      fetchProfile(user.id)
+    }
+  }
+
+  const signIn = async (email: string, password: string): Promise<{ error: any | null }> => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      return { error }
+    } catch (err: any) {
+      console.error("Sign-in exception:", err)
+      return { error: err }
+    }
+  }
+
+  const signUp = async (email: string, password: string, name: string): Promise<{ error: any | null }> => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+          },
+        },
+      })
+      return { error }
+    } catch (err: any) {
+      console.error("Sign-up exception:", err)
+      return { error: err }
+    }
+  }
+
+  const signOut = async () => {
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    } catch (err: any) {
+      console.error("Sign out error:", err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const value = { session, user, profile, loading, error, signIn, signUp, signOut, retryProfileCreation }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
+}
