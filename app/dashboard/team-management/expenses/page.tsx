@@ -34,8 +34,8 @@ export default function SlotExpensesPage() {
   const [filters, setFilters] = useState({
     team_id: "all",
     organizer: "all",
-    date_from: null as Date | null,
-    date_to: null as Date | null,
+    date_from: undefined as Date | undefined,
+    date_to: undefined as Date | undefined,
   })
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export default function SlotExpensesPage() {
 
   const fetchTeams = async () => {
     try {
-      let query = supabase.from("teams").select("id, name").order("name")
+      let query = supabase.from("teams").select("*").order("name")
 
       if (profile?.role === "coach" || profile?.role === "player") {
         query = query.eq("id", profile.team_id!)
@@ -128,8 +128,8 @@ export default function SlotExpensesPage() {
     setFilters({
       team_id: "all",
       organizer: "all",
-      date_from: null,
-      date_to: null,
+      date_from: undefined,
+      date_to: undefined,
     })
   }
 

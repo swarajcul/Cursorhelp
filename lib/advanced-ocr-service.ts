@@ -40,11 +40,7 @@ export class AdvancedOCRService {
       return {
         text: result.data.text,
         confidence: result.data.confidence,
-        words: result.data.words.map((word) => ({
-          text: word.text,
-          confidence: word.confidence,
-          bbox: word.bbox,
-        })),
+        words: [], // Words API not available in current Tesseract.js version
       }
     } catch (error) {
       console.error("Advanced OCR extraction failed:", error)

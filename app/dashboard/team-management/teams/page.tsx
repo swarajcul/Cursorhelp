@@ -67,7 +67,7 @@ export default function TeamsPage() {
 
   const fetchCoaches = async () => {
     try {
-      const { data, error } = await supabase.from("users").select("id, name, email").eq("role", "coach")
+      const { data, error } = await supabase.from("users").select("*").eq("role", "coach")
       if (error) throw error
       setCoaches(data || [])
     } catch (error) {
@@ -271,7 +271,10 @@ export default function TeamsPage() {
                   <TableCell className="font-medium">{team.name}</TableCell>
                   <TableCell>{team.tier}</TableCell>
                   <TableCell>
-                    {(team.coach as UserProfile)?.name || (team.coach as UserProfile)?.email || "N/A"}
+                    {(() => {
+                      const coach = coaches.find(c => c.id === team.coach_id)
+                      return coach?.name || coach?.email || "N/A"
+                    })()}
                   </TableCell>
                   <TableCell>{team.status}</TableCell>
                   {canManage && (

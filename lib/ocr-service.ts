@@ -23,19 +23,21 @@ export class OCRService {
     const imageUrl = URL.createObjectURL(imageFile)
     const worker = await getWorker()
 
-    worker.on("progress", (m) => {
-      if (m.status === "recognizing text") {
-        const progress = Math.round((m.progress ?? 0) * 100)
-        console.log(`[Tesseract] progress ${progress}%`)
-        onProgress?.(progress)
+    // Set progress callback
+    worker.setParameters({
+      logger: (m: any) => {
+        if (m.status === "recognizing text") {
+          const progress = Math.round((m.progress ?? 0) * 100)
+          console.log(`[Tesseract] progress ${progress}%`)
+          onProgress?.(progress)
+        }
       }
     })
 
     try {
       onProgress?.(10)
-      await worker.loadLanguage("eng")
+      await worker.reinitialize("eng")
       onProgress?.(20)
-      await worker.initialize("eng")
       await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO })
       onProgress?.(40)
 
