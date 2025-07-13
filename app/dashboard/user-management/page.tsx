@@ -72,36 +72,23 @@ export default function UserManagementPage() {
     try {
       console.log("🔍 Fetching users for admin panel...")
       
-      // Try admin service first
-      const { data: adminData, error: adminError } = await SupabaseAdminService.getAllUsers()
+      // Use admin service to get all users
+      const { data, error } = await SupabaseAdminService.getAllUsers()
       
-      if (adminData && !adminError) {
-        console.log(`✅ Admin service found ${adminData.length} users`)
-        setUsers(adminData)
-        return
-      }
-      
-      console.log("⚠️ Admin service failed, trying direct query...")
-      
-      // Fallback to direct query
-      const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
-
       if (error) {
-        console.error("❌ Direct query also failed:", error)
+        console.error("❌ Error fetching users:", error)
         throw error
       }
       
-      console.log(`✅ Direct query found ${data?.length || 0} users`)
+      console.log(`✅ Found ${data?.length || 0} users`)
       setUsers(data || [])
     } catch (error: any) {
       console.error("❌ Error fetching users:", error)
       toast({
         title: "Error",
         description: `Failed to fetch users: ${error.message}`,
-        variant: "destructive",
+        variant: "destructive"
       })
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -184,21 +171,29 @@ export default function UserManagementPage() {
     }
 
     try {
-      const { error } = await supabase.from("users").delete().eq("id", userId)
-
-      if (error) throw error
-
-      setUsers(users.filter((user) => user.id !== userId))
+      if (!profile?.id) {
+        throw new Error("No profile ID available")
+      }
+      
+      // Use admin service to delete user
+      const result = await SupabaseAdminService.deleteUser(userId, profile.id)
+      
+      if (!result.success) {
+        throw new Error(result.error?.message || "Delete failed")
+      }
+      
+      // Refresh the user list
+      await fetchUsers()
 
       toast({
         title: "Success",
         description: "User deleted successfully",
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting user:", error)
       toast({
         title: "Error",
-        description: "Failed to delete user",
+        description: `Failed to delete user: ${error.message}`,
         variant: "destructive",
       })
     }
@@ -252,6 +247,61 @@ export default function UserManagementPage() {
       toast({
         title: "Diagnostic Error",
         description: "Failed to run diagnostics",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const syncMissingProfiles = async () => {
+    try {
+      console.log("🔄 Starting profile sync process...")
+      setLoading(true)
+      
+      const result = await SupabaseAdminService.createMissingProfiles()
+      
+      if (result.success) {
+        toast({
+          title: "Sync Complete",
+          description: result.message,
+          variant: "default"
+        })
+        
+        // Refresh users list after sync
+        await fetchUsers()
+      } else {
+        throw new Error(result.error || "Sync failed")
+      }
+    } catch (error: any) {
+      console.error("❌ Profile sync failed:", error)
+      toast({
+        title: "Sync Failed",
+        description: error.message,
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const testAdminPermissions = async () => {
+    try {
+      if (!profile?.id) {
+        throw new Error("No profile ID")
+      }
+      
+      const results = await SupabaseAdminService.testAdminPermissions(profile.id)
+      
+      toast({
+        title: "Admin Permissions Test",
+        description: `Can read users: ${results.canReadUsers}, Can read auth: ${results.canReadAuthUsers}, Is admin: ${results.isAdmin}`,
+        variant: results.canReadUsers ? "default" : "destructive"
+      })
+      
+      console.log("Admin permissions test:", results)
+    } catch (error: any) {
+      toast({
+        title: "Permission Test Failed",
+        description: error.message,
         variant: "destructive"
       })
     }
@@ -334,35 +384,18 @@ export default function UserManagementPage() {
             <Button
               size="sm"
               variant="outline"
-              onClick={async () => {
-                try {
-                  const result = await AuthProfileSync.createMissingProfiles()
-                  
-                  if (result.success) {
-                    toast({
-                      title: "Profile Sync Complete",
-                      description: `Created ${result.created} missing profiles`,
-                    })
-                    // Refresh the user list
-                    fetchUsers()
-                  } else {
-                    toast({
-                      title: "Profile Sync Failed",
-                      description: result.error || "Unknown error",
-                      variant: "destructive"
-                    })
-                  }
-                } catch (error: any) {
-                  toast({
-                    title: "Profile Sync Error",
-                    description: error.message,
-                    variant: "destructive"
-                  })
-                }
-              }}
+              onClick={syncMissingProfiles}
               className="mr-2"
             >
               Sync Missing Profiles
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={testAdminPermissions}
+              className="mr-2"
+            >
+              Test Admin Permissions
             </Button>
             <Button
               size="sm"
