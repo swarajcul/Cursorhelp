@@ -27,7 +27,7 @@ export function AddPerformance({ users, onPerformanceAdded }: AddPerformanceProp
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    player_id: "",
+    player_id: profile?.role === "player" ? profile.id : "",
     match_number: "",
     slot: "",
     map: "",
@@ -41,6 +41,16 @@ export function AddPerformance({ users, onPerformanceAdded }: AddPerformanceProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile) return
+
+    // Security check: Players can only submit their own stats
+    if (profile.role === "player" && formData.player_id !== profile.id) {
+      toast({
+        title: "Error",
+        description: "You can only submit your own performance data",
+        variant: "destructive",
+      })
+      return
+    }
 
     setLoading(true)
     try {
@@ -104,24 +114,42 @@ export function AddPerformance({ users, onPerformanceAdded }: AddPerformanceProp
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="player">Player</Label>
-              <Select
-                value={formData.player_id}
-                onValueChange={(value) => setFormData({ ...formData, player_id: value })}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select player" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users
-                    .filter((u) => u.role === "player")
-                    .map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.name || user.email}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              {profile?.role === "player" ? (
+                <Input
+                  value={profile.name || profile.email}
+                  disabled
+                  className="bg-muted"
+                />
+              ) : (
+                <Select
+                  value={formData.player_id}
+                  onValueChange={(value) => setFormData({ ...formData, player_id: value })}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select player" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users
+                      .filter((u) => {
+                        // Admins and managers can see all players
+                        if (["admin", "manager"].includes(profile?.role || "")) {
+                          return u.role === "player"
+                        }
+                        // Coaches can only see their team players
+                        if (profile?.role === "coach") {
+                          return u.role === "player" && u.team_id === profile.team_id
+                        }
+                        return false
+                      })
+                      .map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name || user.email}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-2">

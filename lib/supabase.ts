@@ -61,7 +61,7 @@ export type Database = {
           id: string
           email: string
           name: string | null
-          role: "admin" | "manager" | "coach" | "player" | "analyst"
+          role: "admin" | "manager" | "coach" | "player" | "analyst" | "pending_player" | "awaiting_approval"
           team_id: string | null
           avatar_url: string | null
           created_at: string
@@ -70,13 +70,13 @@ export type Database = {
           id: string
           email: string
           name?: string | null
-          role?: "admin" | "manager" | "coach" | "player" | "analyst"
+          role?: "admin" | "manager" | "coach" | "player" | "analyst" | "pending_player" | "awaiting_approval"
           team_id?: string | null
           avatar_url?: string | null
         }
         Update: {
           name?: string | null
-          role?: "admin" | "manager" | "coach" | "player" | "analyst"
+          role?: "admin" | "manager" | "coach" | "player" | "analyst" | "pending_player" | "awaiting_approval"
           team_id?: string | null
           avatar_url?: string | null
         }

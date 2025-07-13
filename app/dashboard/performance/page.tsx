@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AddPerformance } from "@/components/performance/add-performance"
 import { OCRExtract } from "@/components/performance/ocr-extract"
 import { PerformanceDashboard } from "@/components/performance/performance-dashboard"
+import { PlayerPerformanceSubmit } from "@/components/performance/player-performance-submit"
 import type { Database } from "@/lib/supabase"
 
 type Performance = Database["public"]["Tables"]["performances"]["Row"]
@@ -71,6 +72,7 @@ export default function PerformancePage() {
       <Tabs defaultValue="dashboard" className="space-y-4">
         <TabsList>
           <TabsTrigger value="dashboard">📈 Dashboard</TabsTrigger>
+          {profile?.role === "player" && <TabsTrigger value="submit">🎮 Submit Performance</TabsTrigger>}
           {canEdit && <TabsTrigger value="add">➕ Add Performance</TabsTrigger>}
           {canEdit && <TabsTrigger value="ocr">📷 OCR Extract</TabsTrigger>}
         </TabsList>
@@ -78,6 +80,12 @@ export default function PerformancePage() {
         <TabsContent value="dashboard">
           <PerformanceDashboard performances={performances} users={users} currentUser={profile} />
         </TabsContent>
+
+        {profile?.role === "player" && (
+          <TabsContent value="submit">
+            <PlayerPerformanceSubmit onPerformanceAdded={fetchPerformances} />
+          </TabsContent>
+        )}
 
         {canEdit && (
           <TabsContent value="add">
