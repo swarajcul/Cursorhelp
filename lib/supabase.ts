@@ -76,7 +76,8 @@ export type Database = {
           id: string
           email: string
           name: string | null
-          role: "admin" | "manager" | "coach" | "player" | "analyst" | "pending_player" | "awaiting_approval"
+          role: "admin" | "manager" | "coach" | "player" | "analyst" | "pending"
+          role_level: number | null
           team_id: string | null
           avatar_url: string | null
           created_at: string
@@ -85,13 +86,15 @@ export type Database = {
           id: string
           email: string
           name?: string | null
-          role?: "admin" | "manager" | "coach" | "player" | "analyst" | "pending_player" | "awaiting_approval"
+          role?: "admin" | "manager" | "coach" | "player" | "analyst" | "pending"
+          role_level?: number | null
           team_id?: string | null
           avatar_url?: string | null
         }
         Update: {
           name?: string | null
-          role?: "admin" | "manager" | "coach" | "player" | "analyst" | "pending_player" | "awaiting_approval"
+          role?: "admin" | "manager" | "coach" | "player" | "analyst" | "pending"
+          role_level?: number | null
           team_id?: string | null
           avatar_url?: string | null
         }
@@ -149,6 +152,7 @@ export type Database = {
         }
         Update: {
           team_id?: string | null
+          player_id?: string
           match_number?: number
           slot?: number
           map?: string
@@ -157,6 +161,7 @@ export type Database = {
           assists?: number
           damage?: number
           survival_time?: number
+          added_by?: string | null
         }
       }
       rosters: {
