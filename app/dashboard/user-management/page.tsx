@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Trash2, Edit } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { Database } from "@/lib/supabase"
+import { UserManagementService } from "@/lib/user-management"
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"]
 type Team = Database["public"]["Tables"]["teams"]["Row"]
@@ -65,27 +66,46 @@ export default function UserManagementPage() {
 
   const updateUser = async (userId: string, updates: Partial<UserProfile>) => {
     try {
-      const { error } = await supabase.from("users").update(updates).eq("id", userId)
-
-      if (error) throw error
-
-      setUsers(users.map((user) => (user.id === userId ? { ...user, ...updates } : user)))
-
-      toast({
-        title: "Success",
-        description: "User updated successfully",
-      })
-
-      setEditingUser(null)
+      console.log("🔧 Attempting to update user:", userId, updates)
+      
+      // Use the new UserManagementService
+      const result = await UserManagementService.updateUser(userId, updates)
+      
+      if (result.success) {
+        // Update local state with the new data
+        setUsers(users.map((user) => (user.id === userId ? { ...user, ...updates } : user)))
+        
+        toast({
+          title: "Success",
+          description: "User updated successfully",
+        })
+        
+        setEditingUser(null)
+      } else {
+        // Handle the error
+        throw result.error
+      }
     } catch (error) {
       console.error("Error updating user:", error)
+      
+      // Enhanced error reporting
+      const errorMessage = error instanceof Error ? error.message : "Failed to update user"
+      console.error("Detailed error:", {
+        message: errorMessage,
+        error: error,
+        userId,
+        updates
+      })
+      
       toast({
         title: "Error",
-        description: "Failed to update user",
+        description: `Failed to update user: ${errorMessage}`,
         variant: "destructive",
       })
     }
   }
+
+
 
   const deleteUser = async (userId: string) => {
     if (!confirm("Are you sure you want to delete this user?")) {
@@ -147,6 +167,52 @@ export default function UserManagementPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
         <p className="text-muted-foreground">Manage users, roles, and team assignments</p>
+        
+        {/* Debug section - remove in production */}
+        {profile?.role === "admin" && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h3 className="font-semibold text-yellow-800 mb-2">Debug Tools</h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => UserManagementService.testRLSPolicies()}
+              className="mr-2"
+            >
+              Test RLS Policies
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const permissions = await UserManagementService.testDatabasePermissions()
+                console.log("Database permissions test:", permissions)
+                toast({
+                  title: "Database Permissions Test",
+                  description: `Read: ${permissions.canRead}, Update: ${permissions.canUpdate}, Insert: ${permissions.canInsert}, Delete: ${permissions.canDelete}`,
+                })
+              }}
+              className="mr-2"
+            >
+              Test DB Permissions
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const hasPermission = await UserManagementService.checkUpdatePermission()
+                console.log("Current profile:", profile)
+                console.log("Users:", users)
+                console.log("Has update permission:", hasPermission)
+                toast({
+                  title: "Current State",
+                  description: `Profile: ${profile?.role}, Has Permission: ${hasPermission}`,
+                })
+              }}
+            >
+              Log Current State
+            </Button>
+          </div>
+        )}
       </div>
 
       <Card>

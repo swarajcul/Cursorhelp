@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         id: userId,
         email: user?.email!,
         name: user?.user_metadata?.name || user?.email?.split("@")[0] || "User",
-        role: existing ? undefined : "admin", // first time = admin
+        role: existing ? undefined : "player", // first time = player (safer default)
       }
 
       if (existing) {
