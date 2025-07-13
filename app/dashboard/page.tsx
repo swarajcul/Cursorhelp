@@ -157,6 +157,10 @@ export default function DashboardPage() {
         return "View personal performance and team stats"
       case "analyst":
         return "Performance analysis and reporting"
+      case "pending_player":
+        return "Profile under review - waiting for approval"
+      case "awaiting_approval":
+        return "Application being processed - please wait"
       default:
         return "Standard user access"
     }
@@ -164,6 +168,17 @@ export default function DashboardPage() {
 
   const getAvailableModules = (role: string) => {
     const modules = []
+
+    // Pending players have very limited access
+    if (["pending_player", "awaiting_approval"].includes(role?.toLowerCase())) {
+      modules.push({
+        title: "Profile Management",
+        description: "Update your personal information and settings",
+        icon: User,
+        href: "/dashboard/profile",
+      })
+      return modules // Return early, no other modules for pending players
+    }
 
     if (role === "admin") {
       modules.push({
@@ -224,7 +239,37 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {["admin", "manager", "coach", "player"].includes(profile.role.toLowerCase()) && (
+      {/* Pending Player Status Card */}
+      {["pending_player", "awaiting_approval"].includes(profile?.role?.toLowerCase()) && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-800">
+              <Shield className="h-5 w-5" />
+              Profile Under Review
+            </CardTitle>
+            <CardDescription className="text-yellow-700">
+              Thank you for completing your registration! Our team is reviewing your profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-yellow-800">
+            <div className="space-y-2">
+              <p className="text-sm">
+                <strong>What happens next?</strong>
+              </p>
+              <ul className="text-sm space-y-1 ml-4 list-disc">
+                <li>Our team will review your gaming profile and experience</li>
+                <li>You'll receive an email notification once approved (24-48 hours)</li>
+                <li>After approval, you'll have full access to team features</li>
+              </ul>
+              <p className="text-sm mt-4">
+                <strong>Questions?</strong> Contact us at admin@raptorofficial.in
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {["admin", "manager", "coach", "player"].includes(profile?.role?.toLowerCase()) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

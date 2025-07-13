@@ -145,6 +145,10 @@ export default function UserManagementPage() {
         return "outline"
       case "analyst":
         return "secondary"
+      case "pending_player":
+        return "outline" // Yellow/warning style would be ideal
+      case "awaiting_approval":
+        return "outline" // Orange/warning style would be ideal
       default:
         return "outline"
     }
@@ -280,6 +284,8 @@ export default function UserManagementPage() {
                     <SelectItem value="coach">Coach</SelectItem>
                     <SelectItem value="player">Player</SelectItem>
                     <SelectItem value="analyst">Analyst</SelectItem>
+                    <SelectItem value="pending_player">Pending Player</SelectItem>
+                    <SelectItem value="awaiting_approval">Awaiting Approval</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

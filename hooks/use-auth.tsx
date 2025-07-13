@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         id: userId,
         email: user?.email!,
         name: user?.user_metadata?.name || user?.email?.split("@")[0] || "User",
-        role: existing ? undefined : "player", // first time = player (safer default)
+        role: existing ? undefined : "pending_player", // first time = pending_player (requires approval)
       }
 
       if (existing) {
@@ -117,6 +117,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           data: {
             name: name,
           },
+          emailRedirectTo: process.env.NODE_ENV === 'production' 
+            ? 'https://dev.raptorofficial.in/auth/confirm'
+            : `${window.location.origin}/auth/confirm`
         },
       })
       return { error }
