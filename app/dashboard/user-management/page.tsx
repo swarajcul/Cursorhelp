@@ -14,6 +14,9 @@ import { Trash2, Edit } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { Database } from "@/lib/supabase"
 import { UserManagementService } from "@/lib/user-management"
+import { SupabaseAdminService } from "@/lib/supabase-admin"
+import { SessionManager } from "@/lib/session-manager"
+import { ProfileFixer } from "@/lib/profile-fixer"
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"]
 type Team = Database["public"]["Tables"]["teams"]["Row"]
@@ -25,6 +28,8 @@ export default function UserManagementPage() {
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [showDebug, setShowDebug] = useState(false)
 
   useEffect(() => {
     if (profile?.role?.toLowerCase() !== "admin") {
@@ -33,19 +38,60 @@ export default function UserManagementPage() {
 
     fetchUsers()
     fetchTeams()
+    
+    // Set up real-time subscription for user changes
+    const subscription = supabase
+      .channel('user-management-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'users' 
+        }, 
+        (payload) => {
+          console.log('📡 Real-time user change detected:', payload)
+          // Refresh users list when changes occur
+          fetchUsers()
+        }
+      )
+      .subscribe()
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [profile])
 
   const fetchUsers = async () => {
     try {
+      console.log("🔍 Fetching users for admin panel...")
+      
+      // Try admin service first
+      const { data: adminData, error: adminError } = await SupabaseAdminService.getAllUsers()
+      
+      if (adminData && !adminError) {
+        console.log(`✅ Admin service found ${adminData.length} users`)
+        setUsers(adminData)
+        return
+      }
+      
+      console.log("⚠️ Admin service failed, trying direct query...")
+      
+      // Fallback to direct query
       const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Direct query also failed:", error)
+        throw error
+      }
+      
+      console.log(`✅ Direct query found ${data?.length || 0} users`)
       setUsers(data || [])
-    } catch (error) {
-      console.error("Error fetching users:", error)
+    } catch (error: any) {
+      console.error("❌ Error fetching users:", error)
       toast({
         title: "Error",
-        description: "Failed to fetch users",
+        description: `Failed to fetch users: ${error.message}`,
         variant: "destructive",
       })
     } finally {
@@ -68,28 +114,47 @@ export default function UserManagementPage() {
     try {
       console.log("🔧 Attempting to update user:", userId, updates)
       
-      // Use the new UserManagementService
-      const result = await UserManagementService.updateUser(userId, updates)
-      
-      if (result.success) {
-        // Update local state with the new data
-        setUsers(users.map((user) => (user.id === userId ? { ...user, ...updates } : user)))
+      // If updating role, use admin service
+      if (updates.role && profile?.id) {
+        const { data, error } = await SupabaseAdminService.updateUserRole(
+          userId, 
+          updates.role, 
+          profile.id
+        )
         
-        toast({
-          title: "Success",
-          description: "User updated successfully",
-        })
+        if (error) {
+          throw error
+        }
         
-        setEditingUser(null)
-      } else {
-        // Handle the error
-        throw result.error
+        console.log("✅ Role updated via admin service")
       }
-    } catch (error) {
-      console.error("Error updating user:", error)
       
-      // Enhanced error reporting
-      const errorMessage = error instanceof Error ? error.message : "Failed to update user"
+      // For other updates, use the standard service
+      if (Object.keys(updates).some(key => key !== 'role')) {
+        const result = await UserManagementService.updateUser(userId, updates)
+        
+        if (!result.success) {
+          throw result.error
+        }
+      }
+      
+      // Update local state optimistically
+      setUsers(users.map((user) => (user.id === userId ? { ...user, ...updates } : user)))
+      
+      toast({
+        title: "Success",
+        description: "User updated successfully",
+      })
+      
+      setEditingUser(null)
+      
+      // Refresh to ensure we have latest data
+      setTimeout(() => fetchUsers(), 500)
+      
+    } catch (error: any) {
+      console.error("❌ Error updating user:", error)
+      
+      const errorMessage = error?.message || "Failed to update user"
       console.error("Detailed error:", {
         message: errorMessage,
         error: error,
@@ -98,7 +163,7 @@ export default function UserManagementPage() {
       })
       
       toast({
-        title: "Error",
+        title: "Error", 
         description: `Failed to update user: ${errorMessage}`,
         variant: "destructive",
       })
@@ -129,6 +194,58 @@ export default function UserManagementPage() {
         title: "Error",
         description: "Failed to delete user",
         variant: "destructive",
+      })
+    }
+  }
+
+  const runDiagnostics = async () => {
+    if (!profile?.id) return
+    
+    try {
+      console.log("🔍 Running comprehensive diagnostics...")
+      
+      const results = {
+        timestamp: new Date().toISOString(),
+        currentUser: {
+          id: profile.id,
+          email: profile.email,
+          role: profile.role
+        },
+        sessionInfo: SessionManager.getSessionStatus(),
+        adminPermissions: await SupabaseAdminService.testAdminPermissions(profile.id),
+        userCounts: {
+          visible: users.length,
+          expected: 7 // User mentioned 7 users in database
+        },
+        profileDiagnostics: await ProfileFixer.getDatabaseDiagnostics(),
+        supabaseConnectionTest: await (async () => {
+          try {
+            const { data, error } = await supabase.from('users').select('count', { count: 'exact' })
+            return {
+              success: !error,
+              error: error?.message,
+              count: data?.length || 0
+            }
+          } catch (e: any) {
+            return {
+              success: false,
+              error: e.message,
+              count: 0
+            }
+          }
+        })()
+      }
+      
+      console.log("📊 Diagnostic results:", results)
+      setDebugInfo(results)
+      setShowDebug(true)
+      
+    } catch (error) {
+      console.error("❌ Diagnostics failed:", error)
+      toast({
+        title: "Diagnostic Error",
+        description: "Failed to run diagnostics",
+        variant: "destructive"
       })
     }
   }
@@ -202,6 +319,14 @@ export default function UserManagementPage() {
             <Button
               size="sm"
               variant="outline"
+              onClick={runDiagnostics}
+              className="mr-2"
+            >
+              Run Full Diagnostics
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={async () => {
                 const hasPermission = await UserManagementService.checkUpdatePermission()
                 console.log("Current profile:", profile)
@@ -215,6 +340,20 @@ export default function UserManagementPage() {
             >
               Log Current State
             </Button>
+            
+            {showDebug && debugInfo && (
+              <div className="mt-4 p-3 bg-gray-50 border rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-semibold">Diagnostic Results</h4>
+                  <Button size="sm" variant="ghost" onClick={() => setShowDebug(false)}>
+                    Close
+                  </Button>
+                </div>
+                <pre className="text-xs overflow-auto max-h-64 whitespace-pre-wrap">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
         )}
       </div>
