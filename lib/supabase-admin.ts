@@ -13,11 +13,22 @@ const supabaseAdmin = createClient<Database>(
   }
 )
 
+// Type definition for better TypeScript support
+type AdminServiceResult<T = any> = {
+  data: T | null
+  error: any
+}
+
+type AdminOperationResult = {
+  success: boolean
+  error: any
+}
+
 export class SupabaseAdminService {
   /**
    * Get all users - uses service role to bypass RLS
    */
-  static async getAllUsers() {
+  static async getAllUsers(): Promise<AdminServiceResult<any[]>> {
     try {
       console.log("🔍 Fetching all users with admin service...")
       
@@ -175,7 +186,7 @@ export class SupabaseAdminService {
   /**
    * Delete user - admin operation
    */
-  static async deleteUser(userId: string, currentUserId: string) {
+  static async deleteUser(userId: string, currentUserId: string): Promise<AdminOperationResult> {
     try {
       console.log("🗑️ Admin deleting user:", { userId, currentUserId })
       
