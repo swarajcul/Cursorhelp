@@ -18,6 +18,8 @@ import { SupabaseAdminService } from "@/lib/supabase-admin"
 import { SessionManager } from "@/lib/session-manager"
 import { ProfileFixer } from "@/lib/profile-fixer"
 import { AuthProfileSync } from "@/lib/auth-profile-sync"
+import { SecureProfileCreation } from "@/lib/secure-profile-creation"
+import { RoleAccess, ROLE_CONFIG } from "@/lib/role-system"
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"]
 type Team = Database["public"]["Tables"]["teams"]["Row"]
@@ -393,6 +395,62 @@ export default function UserManagementPage() {
               className="mr-2"
             >
               Manual Create Profile
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={async () => {
+                const confirmed = window.confirm(
+                  "EMERGENCY: Create admin profile for current session?\n\n" +
+                  "This will create an admin profile for the currently logged-in user.\n" +
+                  "Only use this if you're locked out due to missing admin profile."
+                )
+                
+                if (!confirmed) return
+                
+                try {
+                  const { data: { user } } = await supabase.auth.getUser()
+                  
+                  if (!user) {
+                    toast({
+                      title: "Error",
+                      description: "No authenticated user found",
+                      variant: "destructive"
+                    })
+                    return
+                  }
+                  
+                  const result = await SecureProfileCreation.createAdminProfile(
+                    user.id,
+                    user.email || '',
+                    user.user_metadata?.name || user.email?.split('@')[0] || 'Admin'
+                  )
+                  
+                  if (result.success) {
+                    toast({
+                      title: "Emergency Admin Created",
+                      description: `Admin profile created for ${user.email}`,
+                    })
+                    // Refresh the page to load the new profile
+                    window.location.reload()
+                  } else {
+                    toast({
+                      title: "Emergency Admin Failed",
+                      description: result.error || "Unknown error",
+                      variant: "destructive"
+                    })
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Emergency Admin Error",
+                    description: error.message,
+                    variant: "destructive"
+                  })
+                }
+              }}
+              className="mr-2"
+            >
+              🚨 Emergency Admin
             </Button>
             <Button
               size="sm"

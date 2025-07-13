@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useEffect, createContext, useContext } from "react"
 import { supabase } from "@/lib/supabase"
 import { SessionManager } from "@/lib/session-manager"
+import { SecureProfileCreation } from "@/lib/secure-profile-creation"
 import type { Session } from "@supabase/supabase-js"
 
 type AuthContextType = {
@@ -108,28 +109,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw selectErr
       }
 
-      // 2 – Insert or update as needed
-      const profilePayload = {
-        id: userId,
-        email: user?.email!,
-        name: user?.user_metadata?.name || user?.email?.split("@")[0] || "User",
-        role: existing ? undefined : "pending_player", // first time = pending_player (requires approval)
-      }
-
       if (existing) {
-        const { error: updateErr } = await supabase.from("users").update(profilePayload).eq("id", userId)
-        if (updateErr) throw updateErr
-      } else {
-        const { error: insertErr } = await supabase.from("users").insert(profilePayload)
-        if (insertErr) throw insertErr
+        // Profile exists, use it
+        setProfile(existing)
+        return
       }
 
-      // 3 – Fetch the (now-definitely-there) profile
-      const { data: profileRow, error: finalErr } = await supabase.from("users").select("*").eq("id", userId).single()
+      // 2 – Profile doesn't exist, create it using secure profile creation
+      console.log("🔧 Creating profile for user:", userId, user?.email)
+      
+      const profileResult = await SecureProfileCreation.createProfile(
+        userId,
+        user?.email!,
+        user?.user_metadata?.name || user?.user_metadata?.full_name || undefined
+      )
 
-      if (finalErr) throw finalErr
+      if (!profileResult.success) {
+        throw new Error(profileResult.error || "Profile creation failed")
+      }
 
-      setProfile(profileRow)
+      // 3 – Set the created profile
+      setProfile(profileResult.profile)
     } catch (err: any) {
       console.error("Profile creation / fetch error:", err)
       setError(err.message || "Could not create / fetch profile")
