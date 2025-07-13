@@ -17,6 +17,7 @@ import { UserManagementService } from "@/lib/user-management"
 import { SupabaseAdminService } from "@/lib/supabase-admin"
 import { SessionManager } from "@/lib/session-manager"
 import { ProfileFixer } from "@/lib/profile-fixer"
+import { AuthProfileSync } from "@/lib/auth-profile-sync"
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"]
 type Team = Database["public"]["Tables"]["teams"]["Row"]
@@ -30,6 +31,9 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [showManualCreate, setShowManualCreate] = useState(false)
+  const [manualEmail, setManualEmail] = useState("")
+  const [manualName, setManualName] = useState("")
 
   useEffect(() => {
     if (profile?.role?.toLowerCase() !== "admin") {
@@ -218,6 +222,7 @@ export default function UserManagementPage() {
           expected: 7 // User mentioned 7 users in database
         },
         profileDiagnostics: await ProfileFixer.getDatabaseDiagnostics(),
+        syncStatus: await AuthProfileSync.getSyncStatus(),
         supabaseConnectionTest: await (async () => {
           try {
             const { data, error } = await supabase.from('users').select('count', { count: 'exact' })
@@ -328,6 +333,71 @@ export default function UserManagementPage() {
               size="sm"
               variant="outline"
               onClick={async () => {
+                try {
+                  const result = await AuthProfileSync.createMissingProfiles()
+                  
+                  if (result.success) {
+                    toast({
+                      title: "Profile Sync Complete",
+                      description: `Created ${result.created} missing profiles`,
+                    })
+                    // Refresh the user list
+                    fetchUsers()
+                  } else {
+                    toast({
+                      title: "Profile Sync Failed",
+                      description: result.error || "Unknown error",
+                      variant: "destructive"
+                    })
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Profile Sync Error",
+                    description: error.message,
+                    variant: "destructive"
+                  })
+                }
+              }}
+              className="mr-2"
+            >
+              Sync Missing Profiles
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const status = await AuthProfileSync.getSyncStatus()
+                  console.log("Sync Status:", status)
+                  
+                  toast({
+                    title: "Sync Status",
+                    description: `Profiles: ${status.profiles?.count || 0}, Auth Users: ${status.authUsers?.accessible ? status.authUsers.count : 'Unknown'}`,
+                  })
+                } catch (error: any) {
+                  toast({
+                    title: "Sync Status Error",
+                    description: error.message,
+                    variant: "destructive"
+                  })
+                }
+              }}
+              className="mr-2"
+            >
+              Check Sync Status
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowManualCreate(true)}
+              className="mr-2"
+            >
+              Manual Create Profile
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
                 const hasPermission = await UserManagementService.checkUpdatePermission()
                 console.log("Current profile:", profile)
                 console.log("Users:", users)
@@ -349,11 +419,95 @@ export default function UserManagementPage() {
                     Close
                   </Button>
                 </div>
-                <pre className="text-xs overflow-auto max-h-64 whitespace-pre-wrap">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
-              </div>
-            )}
+                                 <pre className="text-xs overflow-auto max-h-64 whitespace-pre-wrap">
+                   {JSON.stringify(debugInfo, null, 2)}
+                 </pre>
+               </div>
+             )}
+             
+             {showManualCreate && (
+               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                 <div className="flex justify-between items-center mb-3">
+                   <h4 className="font-semibold text-blue-800">Manually Create Missing Profile</h4>
+                   <Button size="sm" variant="ghost" onClick={() => setShowManualCreate(false)}>
+                     Close
+                   </Button>
+                 </div>
+                 <div className="space-y-3">
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                       Email Address
+                     </label>
+                     <input
+                       type="email"
+                       value={manualEmail}
+                       onChange={(e) => setManualEmail(e.target.value)}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="user@example.com"
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                       Name (Optional)
+                     </label>
+                     <input
+                       type="text"
+                       value={manualName}
+                       onChange={(e) => setManualName(e.target.value)}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="User Name"
+                     />
+                   </div>
+                   <Button
+                     size="sm"
+                     onClick={async () => {
+                       if (!manualEmail) {
+                         toast({
+                           title: "Error",
+                           description: "Email is required",
+                           variant: "destructive"
+                         })
+                         return
+                       }
+                       
+                       try {
+                         const result = await AuthProfileSync.createProfileManually(
+                           manualEmail,
+                           manualName || undefined,
+                           'pending_player'
+                         )
+                         
+                         if (result.success) {
+                           toast({
+                             title: "Profile Created",
+                             description: `Profile created for ${manualEmail}`,
+                           })
+                           setManualEmail("")
+                           setManualName("")
+                           setShowManualCreate(false)
+                           fetchUsers()
+                         } else {
+                           toast({
+                             title: "Profile Creation Failed",
+                             description: result.error || "Unknown error",
+                             variant: "destructive"
+                           })
+                         }
+                       } catch (error: any) {
+                         toast({
+                           title: "Profile Creation Error",
+                           description: error.message,
+                           variant: "destructive"
+                         })
+                       }
+                     }}
+                     className="mr-2"
+                   >
+                     Create Profile
+                   </Button>
+                 </div>
+               </div>
+             )}
           </div>
         )}
       </div>
