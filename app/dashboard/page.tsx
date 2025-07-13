@@ -45,7 +45,7 @@ export default function DashboardPage() {
 
   const fetchTeams = async () => {
     try {
-      let query = supabase.from("teams").select("id, name").order("name")
+      let query = supabase.from("teams").select("*").order("name")
       if (profile?.role === "coach") {
         query = query.eq("coach_id", profile.id)
       } else if (profile?.role === "player") {

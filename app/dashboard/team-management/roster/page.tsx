@@ -98,7 +98,7 @@ export default function RosterPage() {
   const fetchAvailablePlayers = async () => {
     try {
       // Fetch all users who are players and not already in a roster (or not in the current selected team's roster)
-      const { data, error } = await supabase.from("users").select("id, name, email").eq("role", "player")
+      const { data, error } = await supabase.from("users").select("*").eq("role", "player")
       if (error) throw error
 
       // Filter out players already in the current roster

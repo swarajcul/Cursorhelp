@@ -87,7 +87,7 @@ export default function PrizePoolPage() {
       setWinnings(winningsData || [])
 
       // Fetch teams for winning assignment
-      let teamsQuery = supabase.from("teams").select("id, name").order("name")
+      let teamsQuery = supabase.from("teams").select("*").order("name")
       if (profile?.role === "coach") {
         teamsQuery = teamsQuery.eq("id", profile.team_id!)
       } else if (profile?.role === "player") {
