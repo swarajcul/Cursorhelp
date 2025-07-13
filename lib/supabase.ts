@@ -19,7 +19,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'raptor-auth-token',
+    debug: process.env.NODE_ENV === 'development'
+  },
+  global: {
+    headers: {
+      'x-application': 'raptor-esports-crm'
+    }
+  }
+})
 
 // Add connection test function with better debugging
 export const testConnection = async () => {

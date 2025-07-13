@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, createContext, useContext } from "react"
 import { supabase } from "@/lib/supabase"
+import { SessionManager } from "@/lib/session-manager"
 import type { Session } from "@supabase/supabase-js"
 
 type AuthContextType = {
@@ -28,15 +29,62 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user || null)
-    })
+    const initializeAuth = async () => {
+      try {
+        // Check session manager first
+        const isValid = SessionManager.isSessionValid()
+        console.log('🔍 Session validity check:', isValid)
+        
+        if (!isValid) {
+          console.log('⚠️ Session expired, clearing auth state')
+          setSession(null)
+          setUser(null)
+          return
+        }
+        
+        // Get current session from Supabase
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Session fetch error:', error)
+          setSession(null)
+          setUser(null)
+          return
+        }
+        
+        if (session) {
+          console.log('✅ Valid session found:', session.user?.email)
+          SessionManager.extendSession() // Update activity
+        }
+        
+        setSession(session)
+        setUser(session?.user || null)
+      } catch (error) {
+        console.error('Auth initialization error:', error)
+        setSession(null)
+        setUser(null)
+      }
+    }
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user || null)
-    })
+    initializeAuth()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("🔐 Auth state change:", event, session?.user?.email)
+        
+        if (event === 'SIGNED_IN' && session) {
+          SessionManager.extendSession()
+        } else if (event === 'SIGNED_OUT') {
+          // Clear session data when user signs out
+          await SessionManager.logout()
+        }
+        
+        setSession(session)
+        setUser(session?.user || null)
+      }
+    )
+
+    return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
