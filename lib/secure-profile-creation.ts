@@ -33,13 +33,29 @@ export class SecureProfileCreation {
       const defaultRoleLevel = RoleAccess.getRoleInfo(defaultRole).level
       
       // Create profile with safe defaults
-      const profileData = {
+      // Check if role_level column exists (for backward compatibility)
+      const profileData: any = {
         id: userId,
         email: email,
         name: name || email.split('@')[0] || 'User',
         role: defaultRole,
-        role_level: defaultRoleLevel,
         created_at: new Date().toISOString()
+      }
+      
+      // Only add role_level if the column exists (after migration)
+      try {
+        // Test if role_level column exists by trying a select
+        const { error: testError } = await supabase
+          .from('users')
+          .select('role_level')
+          .limit(1)
+        
+        if (!testError) {
+          profileData.role_level = defaultRoleLevel
+        }
+      } catch (e) {
+        // Column doesn't exist, continue without it
+        console.log('role_level column not found, creating profile without it')
       }
       
       console.log(`📝 Creating profile with role: ${defaultRole}`)
@@ -152,12 +168,25 @@ export class SecureProfileCreation {
       // Update the role
       const newRoleLevel = RoleAccess.getRoleInfo(newRole).level
       
+      // Check if role_level column exists before updating
+      const updateData: any = { role: newRole }
+      
+      try {
+        const { error: testError } = await supabase
+          .from('users')
+          .select('role_level')
+          .limit(1)
+        
+        if (!testError) {
+          updateData.role_level = newRoleLevel
+        }
+      } catch (e) {
+        console.log('role_level column not found, updating role without it')
+      }
+      
       const { data: updatedProfile, error: updateError } = await supabase
         .from('users')
-        .update({
-          role: newRole,
-          role_level: newRoleLevel
-        })
+        .update(updateData)
         .eq('id', targetUserId)
         .select()
         .single()
@@ -206,13 +235,26 @@ export class SecureProfileCreation {
       console.log(`🚨 Creating ADMIN profile for: ${email}`)
       
       // This is a special case - create with admin role directly
-      const profileData = {
+      const profileData: any = {
         id: userId,
         email: email,
         name: name,
         role: ROLES.ADMIN,
-        role_level: 100,
         created_at: new Date().toISOString()
+      }
+      
+      // Only add role_level if the column exists (after migration)
+      try {
+        const { error: testError } = await supabase
+          .from('users')
+          .select('role_level')
+          .limit(1)
+        
+        if (!testError) {
+          profileData.role_level = 100
+        }
+      } catch (e) {
+        console.log('role_level column not found, creating admin profile without it')
       }
       
       const { data: newProfile, error: createError } = await supabase
@@ -264,14 +306,36 @@ export class SecureProfileCreation {
       const defaultRole = RoleAccess.getDefaultRole()
       const defaultRoleLevel = RoleAccess.getRoleInfo(defaultRole).level
       
-      const profilesToCreate = users.map(user => ({
-        id: user.id,
-        email: user.email,
-        name: user.name || user.email.split('@')[0] || 'User',
-        role: defaultRole,
-        role_level: defaultRoleLevel,
-        created_at: new Date().toISOString()
-      }))
+      // Check if role_level column exists
+      let includeRoleLevel = false
+      try {
+        const { error: testError } = await supabase
+          .from('users')
+          .select('role_level')
+          .limit(1)
+        
+        if (!testError) {
+          includeRoleLevel = true
+        }
+      } catch (e) {
+        console.log('role_level column not found, creating profiles without it')
+      }
+      
+      const profilesToCreate = users.map(user => {
+        const profile: any = {
+          id: user.id,
+          email: user.email,
+          name: user.name || user.email.split('@')[0] || 'User',
+          role: defaultRole,
+          created_at: new Date().toISOString()
+        }
+        
+        if (includeRoleLevel) {
+          profile.role_level = defaultRoleLevel
+        }
+        
+        return profile
+      })
       
       const { data: createdProfiles, error: createError } = await supabase
         .from('users')
@@ -365,15 +429,30 @@ export class SecureProfileCreation {
         const testId = 'test-' + Math.random().toString(36).substring(7)
         const testEmail = `test-${role}@example.com`
         
+        // Check if role_level column exists
+        const testData: any = {
+          id: testId,
+          email: testEmail,
+          name: `Test ${role}`,
+          role: role
+        }
+        
+        try {
+          const { error: columnTestError } = await supabase
+            .from('users')
+            .select('role_level')
+            .limit(1)
+          
+          if (!columnTestError) {
+            testData.role_level = RoleAccess.getRoleInfo(role).level
+          }
+        } catch (e) {
+          // Column doesn't exist, test without it
+        }
+        
         const { data, error } = await supabase
           .from('users')
-          .insert({
-            id: testId,
-            email: testEmail,
-            name: `Test ${role}`,
-            role: role,
-            role_level: RoleAccess.getRoleInfo(role).level
-          })
+          .insert(testData)
           .select()
         
         if (error) {
